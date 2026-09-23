@@ -117,7 +117,11 @@ export function registerTools(server: McpServer, connection: Connection, config:
           fromDate: dateString.optional(),
           toDate: dateString.optional(),
           customerId: z.number().int().positive().optional(),
-          customerName: z.string().min(1).optional(),
+          customerName: z.string().min(1).optional().describe(
+            "EXACT customer name — this is not a substring search. A name that does " +
+              "not exist fails with ClientDoesntExists. Use invoice4u_list_customers " +
+              "to find the exact name, or filter by customerId instead.",
+          ),
           fromAmount: z.number().optional(),
           toAmount: z.number().optional(),
           currency: z.string().min(1).optional().describe(
