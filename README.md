@@ -25,10 +25,10 @@ Or let your MCP client fetch it on demand with `npx` — see below.
 On macOS, keep the key in the Keychain so it never lands in a config file, a shell history or a repo. Put `-w` last and `security` prompts for it:
 
 ```bash
-security add-generic-password -s invoice4u -a codelovers -U -w
+security add-generic-password -s invoice4u -a my-business -U -w
 ```
 
-`codelovers` here is just a label — the server attaches no meaning to it. Use one label per Invoice4U account.
+`my-business` here is just a label — the server attaches no meaning to it. Use one label per Invoice4U account.
 
 ### 2. Point a project at that account
 
@@ -42,8 +42,8 @@ Add `.mcp.json` to the project root. It contains no secret, so it is safe to com
       "command": "npx",
       "args": ["-y", "@lordvadar/invoice4u-mcp@^0.1"],
       "env": {
-        "INVOICE4U_ACCOUNT": "codelovers",
-        "INVOICE4U_EXPECT_ORG": "514781368",
+        "INVOICE4U_ACCOUNT": "my-business",
+        "INVOICE4U_EXPECT_ORG": "123456789",
         "INVOICE4U_ENV": "production"
       }
     }

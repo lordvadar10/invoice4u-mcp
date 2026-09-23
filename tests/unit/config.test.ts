@@ -56,10 +56,10 @@ describe("loadConfig", () => {
 
   it("reads the key from the keychain when an account is given", async () => {
     const config = await loadConfig(
-      { INVOICE4U_ENV: "qa", INVOICE4U_ACCOUNT: "codelovers" },
+      { INVOICE4U_ENV: "qa", INVOICE4U_ACCOUNT: "my-business" },
       { resolveSecret: async ({ service, account }) => `${service}:${account}` },
     );
-    expect(config.apiKey).toBe("invoice4u:codelovers");
-    expect(config.keySource).toBe("keychain:invoice4u/codelovers");
+    expect(config.apiKey).toBe("invoice4u:my-business");
+    expect(config.keySource).toBe("keychain:invoice4u/my-business");
   });
 });

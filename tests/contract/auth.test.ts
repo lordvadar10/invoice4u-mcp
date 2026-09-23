@@ -30,7 +30,7 @@ describe("authenticate", () => {
    */
   it("auto: uses the key directly when IsAuthenticated returns a user", async () => {
     const fetchImpl = vi.fn(async () =>
-      json({ d: { __type: "User:#Invoice.Common", Errors: [], ID: 12235, CompanyName: "X" } }),
+      json({ d: { __type: "User:#Invoice.Common", Errors: [], ID: 99001, CompanyName: "X" } }),
     );
     const session = await authenticate(client(fetchImpl), "key", "auto", log);
 

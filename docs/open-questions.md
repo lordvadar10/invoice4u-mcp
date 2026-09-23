@@ -27,7 +27,8 @@ the lower-case `d` — and only from `GetUserData`. `IsAuthenticated` carries
 `CompanyName` and `OrganizationID` but not the registration number, so
 `connect()` merges both calls.
 
-Observed: Codelovers `OrganizationUniqueId=514781368`, `OrganizationID=12235`.
+Both are strings of digits; `OrganizationUniqueId` is the registered company
+number and `OrganizationID` is Invoice4U's own account id.
 
 `INVOICE4U_EXPECT_ORG` still matches against any identifier field, so either
 the registration number or the organisation id works.

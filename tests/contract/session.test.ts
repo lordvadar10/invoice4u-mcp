@@ -10,7 +10,7 @@ function baseConfig(overrides: Partial<Config> = {}): Config {
     env: "qa",
     baseUrl: "https://apiqa.invoice4u.co.il/Services/ApiService.svc",
     apiKey: "key",
-    keySource: "keychain:invoice4u/codelovers",
+    keySource: "keychain:invoice4u/my-business",
     expectOrg: undefined,
     allowWrites: false,
     authMode: "direct",
@@ -31,12 +31,12 @@ function json(body: unknown): Response {
 describe("connect — organisation assertion", () => {
   it("starts when the organisation matches", async () => {
     const fetchImpl = vi.fn(async () =>
-      json({ d: { OrganizationUniqueId: "514781368", CompanyName: "Codelovers Ltd", OrganizationID: 12235, Errors: [] } }),
+      json({ d: { OrganizationUniqueId: "123456789", CompanyName: "Example Business Ltd", OrganizationID: 99001, Errors: [] } }),
     );
     vi.stubGlobal("fetch", fetchImpl);
 
-    const connection = await connect(baseConfig({ expectOrg: "514781368" }), log);
-    expect(connection.org.label).toBe("Codelovers Ltd");
+    const connection = await connect(baseConfig({ expectOrg: "123456789" }), log);
+    expect(connection.org.label).toBe("Example Business Ltd");
     expect(connection.authMode).toBe("direct");
 
     vi.unstubAllGlobals();
@@ -48,7 +48,7 @@ describe("connect — organisation assertion", () => {
     );
     vi.stubGlobal("fetch", fetchImpl);
 
-    await expect(connect(baseConfig({ expectOrg: "514781368" }), log)).rejects.toThrow(
+    await expect(connect(baseConfig({ expectOrg: "123456789" }), log)).rejects.toThrow(
       /Organisation mismatch/,
     );
 
@@ -61,7 +61,7 @@ describe("connect — organisation assertion", () => {
     );
     vi.stubGlobal("fetch", fetchImpl);
 
-    await expect(connect(baseConfig({ expectOrg: "514781368" }), log)).rejects.toThrow(
+    await expect(connect(baseConfig({ expectOrg: "123456789" }), log)).rejects.toThrow(
       /Some Other Business/,
     );
 
@@ -70,12 +70,12 @@ describe("connect — organisation assertion", () => {
 
   it("matches on any identifier field, since the authoritative one is unconfirmed", async () => {
     const fetchImpl = vi.fn(async () =>
-      json({ d: { OrganizationID: 4242, CompanyName: "Rikud Israeli", Errors: [] } }),
+      json({ d: { OrganizationID: 4242, CompanyName: "Second Business Ltd", Errors: [] } }),
     );
     vi.stubGlobal("fetch", fetchImpl);
 
     const connection = await connect(baseConfig({ expectOrg: "4242" }), log);
-    expect(connection.org.label).toBe("Rikud Israeli");
+    expect(connection.org.label).toBe("Second Business Ltd");
 
     vi.unstubAllGlobals();
   });
