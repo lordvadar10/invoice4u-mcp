@@ -16,7 +16,6 @@ import type { AuthMode } from "../config.js";
 import type { Logger } from "../log.js";
 import type { Invoice4uClient } from "./client.js";
 import { Invoice4uError } from "./errors.js";
-
 export type ResolvedAuthMode = "direct" | "exchange";
 
 export interface Session {

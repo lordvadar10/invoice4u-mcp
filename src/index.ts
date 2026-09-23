@@ -55,9 +55,13 @@ main().catch((error: unknown) => {
   // about what to do, and it is not a problem with the key or the config.
   if (error instanceof Invoice4uError && error.kind === "account_expired") {
     message =
-      "This Invoice4U account's subscription has expired, so the API rejects it. " +
-      "The API key is valid — renew the subscription in the Invoice4U account, " +
-      "then start the server again. (ExpiredAccount, error 66)";
+      "Invoice4U reports this account as expired and is rejecting every call " +
+      "(ExpiredAccount, error 66). The API key itself is fine — both the direct " +
+      "and the VerifyLoginApiKey route hit the same wall, so this is an account " +
+      "state, not an authentication problem.\n" +
+      "  Check the account's ExpirationDate: if the web interface still works " +
+      "normally, the API and the billing system disagree and Invoice4U support " +
+      "has to reconcile them.";
   }
 
   process.stderr.write(`[invoice4u-mcp] fatal: ${message}\n`);

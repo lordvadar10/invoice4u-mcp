@@ -139,7 +139,14 @@ npm test
 npm run build
 ```
 
-See [`docs/open-questions.md`](docs/open-questions.md) for what is still unverified against live data.
+## Documentation
+
+| Doc | What |
+|---|---|
+| [`docs/wire-format.md`](docs/wire-format.md) | What the API actually does — envelopes, errors, money, dates, enums, parameter names. Verified against production. |
+| [`docs/multi-account.md`](docs/multi-account.md) | Running several Invoice4U accounts without an agent ever acting on the wrong company. |
+| [`docs/open-questions.md`](docs/open-questions.md) | What is still unverified, and what would settle it. |
+| [`docs/reference/`](docs/reference/) | The production WSDL and all 165 operation names. |
 
 ## License
 
