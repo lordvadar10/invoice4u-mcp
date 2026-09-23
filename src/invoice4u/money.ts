@@ -99,3 +99,66 @@ export function sumMoney(values: readonly (string | null)[]): string {
   const digits = (negative ? -cents : cents).toString().padStart(3, "0");
   return `${negative ? "-" : ""}${digits.slice(0, -2)}.${digits.slice(-2)}`;
 }
+
+/* ------------------------------------------------------------------------ *
+ * Exact arithmetic for building documents.
+ *
+ * Totals on an outgoing document are computed here from the line items and
+ * never taken from the caller, so a document cannot carry a total that
+ * disagrees with the lines that make it up. Everything runs in integer
+ * agorot — no float ever touches a money value.
+ * ------------------------------------------------------------------------ */
+
+/** Parse a decimal string or number into integer agorot. Throws on nonsense. */
+export function toCents(value: string | number): bigint {
+  const normalized = toMoneyString(value);
+  if (normalized === null) throw new TypeError(`not a money value: ${String(value)}`);
+  const negative = normalized.startsWith("-");
+  const [whole = "0", frac = "00"] = (negative ? normalized.slice(1) : normalized).split(".");
+  const cents = BigInt(whole + frac);
+  return negative ? -cents : cents;
+}
+
+export function fromCents(cents: bigint): string {
+  const negative = cents < 0n;
+  const digits = (negative ? -cents : cents).toString().padStart(3, "0");
+  return `${negative ? "-" : ""}${digits.slice(0, -2)}.${digits.slice(-2)}`;
+}
+
+/** Round a scaled bigint back down by `scale` digits, half-up. */
+function rescale(value: bigint, scale: number): bigint {
+  if (scale === 0) return value;
+  const divisor = 10n ** BigInt(scale);
+  const negative = value < 0n;
+  const abs = negative ? -value : value;
+  const quotient = abs / divisor;
+  const remainder = abs % divisor;
+  const rounded = remainder * 2n >= divisor ? quotient + 1n : quotient;
+  return negative ? -rounded : rounded;
+}
+
+/**
+ * unit price x quantity. Quantity may carry up to 4 decimals, which is why
+ * it is scaled rather than rounded first.
+ */
+export function multiplyMoney(unitPrice: string | number, quantity: string | number): string {
+  const price = toCents(unitPrice);
+  const qtyStr = String(quantity).trim();
+  if (!/^-?\d+(\.\d+)?$/.test(qtyStr)) throw new TypeError(`not a quantity: ${qtyStr}`);
+  const [whole = "0", frac = ""] = (qtyStr.startsWith("-") ? qtyStr.slice(1) : qtyStr).split(".");
+  const scale = Math.min(frac.length, 4);
+  const scaled = BigInt(whole + frac.slice(0, 4).padEnd(scale, "0") || "0");
+  const signed = qtyStr.startsWith("-") ? -scaled : scaled;
+  return fromCents(rescale(price * signed, scale));
+}
+
+/** `percent` of an amount, e.g. VAT at "18". */
+export function percentOf(amount: string | number, percent: string | number): string {
+  const base = toCents(amount);
+  const pctStr = String(percent).trim();
+  if (!/^-?\d+(\.\d+)?$/.test(pctStr)) throw new TypeError(`not a percentage: ${pctStr}`);
+  const [whole = "0", frac = ""] = pctStr.split(".");
+  const scale = Math.min(frac.length, 4);
+  const scaled = BigInt(whole + frac.slice(0, 4).padEnd(scale, "0") || "0");
+  return fromCents(rescale(base * scaled, scale + 2));
+}

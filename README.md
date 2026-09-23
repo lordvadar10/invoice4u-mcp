@@ -3,7 +3,7 @@
 An unofficial [Model Context Protocol](https://modelcontextprotocol.io) server for
 **[Invoice4U](https://www.invoice4u.co.il)** (invoice4u.co.il), the Israeli invoicing service.
 
-- **Read-only.** Version 0.1 has no write tools at all — nothing it does can create, change or cancel a document.
+- **Drafts are the entire write surface.** It can prepare an unissued draft for review; it cannot issue, cancel or send anything. A draft is not a tax document — no allocation number, no tax consequence — and issuing it stays a human action in Invoice4U.
 - **One organisation per process.** The Invoice4U account is chosen by configuration at startup, never by a tool argument. A model cannot pick the wrong company because it is never offered the choice.
 - **Account-agnostic.** The server has no notion of your businesses. One API key in, whatever organisation that key opens comes out. Serving a second or tenth account is configuration, not code.
 - TypeScript · Node ≥ 20 · stdio · MIT.
@@ -83,8 +83,31 @@ All read-only, all declaring `readOnlyHint`.
 | `invoice4u_get_customer` | Full contact details, with banking and card data withheld. |
 | `invoice4u_list_branches` | Branches of this organisation. |
 | `invoice4u_get_tax_rate` | VAT rate in effect on a date. |
+| `invoice4u_list_drafts` | Unissued drafts. |
+| `invoice4u_get_draft` | One draft in full. |
+
+Write tools, registered **only** when `INVOICE4U_ALLOW_WRITES=true`:
+
+| Tool | Purpose |
+|---|---|
+| `invoice4u_create_draft` | Prepare an unissued draft. Totals are computed from the line items. |
+| `invoice4u_update_draft` | Replace a draft's contents; returns previous and current state. |
+| `invoice4u_delete_draft` | Delete an unissued draft. Cannot touch an issued document. |
 
 No tool accepts an account, organisation or business argument.
+
+### Why only drafts
+
+Issuing a tax invoice in Israel is not an undoable act: it can only be reversed
+by issuing a credit note, and once it carries an allocation number the Tax
+Authority has been told. There is also no Invoice4U sandbox, so any test of a
+real issue would write a real document to production.
+
+Drafts sidestep all of that. The agent can do the tedious part — assemble the
+lines, get the arithmetic and the VAT right — and a person still decides whether
+it becomes a document. Totals are computed from the line items and cannot be
+supplied by the caller, so a draft can never claim a total that disagrees with
+its own lines.
 
 ## Why it is built this way
 
@@ -125,7 +148,9 @@ Deliberately excluded, with reasons:
 | Area | Why |
 |---|---|
 | Clearing, card charging, stored cards, standing orders | Moves real money. |
-| Document creation, credit invoices, cancellation | Writes with tax consequences; needs the gated, verified write surface. |
+| Issuing real invoices and receipts | Not undoable except by a credit note, and reported to the Tax Authority once an allocation number attaches. Drafts cover the useful part without the risk. |
+| Credit invoices, cancellation, status changes | Destructive writes on issued documents. |
+| Sending documents by email | Outward-facing and not recallable. |
 | Customer deletion | Permanent and destructive. |
 | Inventory, suppliers | Out of scope for an accounting-data server. |
 | A generic passthrough tool | Would undermine the typed, allowlisted surface. |

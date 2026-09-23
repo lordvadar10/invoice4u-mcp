@@ -13,7 +13,9 @@ import { z } from "zod";
 import type { Config } from "../config.js";
 import { DOCUMENT_TYPE, DOCUMENT_TYPE_HE, type DocumentTypeName } from "../invoice4u/enums.js";
 import { Invoice4uError } from "../invoice4u/errors.js";
+import { guard, type Json } from "./result.js";
 import type { Connection } from "../invoice4u/session.js";
+import { registerDraftTools } from "./drafts.js";
 import { toWcfDate, unwrapCollection } from "../invoice4u/wire.js";
 import {
   allocationView,
@@ -24,31 +26,6 @@ import {
 } from "./shape.js";
 
 const READ_ONLY = { readOnlyHint: true, idempotentHint: true, openWorldHint: true } as const;
-
-type Json = Record<string, unknown>;
-
-function ok(payload: Json): { content: { type: "text"; text: string }[] } {
-  return { content: [{ type: "text", text: JSON.stringify({ ok: true, ...payload }, null, 2) }] };
-}
-
-function fail(error: unknown): { content: { type: "text"; text: string }[]; isError: true } {
-  const body =
-    error instanceof Invoice4uError
-      ? error.toResult()
-      : { ok: false, error: { kind: "unexpected_response", message: String(error) } };
-  return { content: [{ type: "text", text: JSON.stringify(body, null, 2) }], isError: true };
-}
-
-/** Wrap a handler so an Invoice4U failure becomes a structured tool error, never a success. */
-function guard<A>(handler: (args: A) => Promise<Json>) {
-  return async (args: A) => {
-    try {
-      return ok(await handler(args));
-    } catch (error) {
-      return fail(error);
-    }
-  };
-}
 
 const documentTypeEnum = z.enum(
   Object.keys(DOCUMENT_TYPE) as [DocumentTypeName, ...DocumentTypeName[]],
@@ -377,6 +354,8 @@ export function registerTools(server: McpServer, connection: Connection, config:
       }),
     ),
   );
+
+  registered.push(...registerDraftTools(server, connection, config));
 
   return registered;
 }
