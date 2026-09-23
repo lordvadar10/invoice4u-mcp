@@ -1,0 +1,38 @@
+{
+  "name": "@lordvadar/invoice4u-mcp",
+  "version": "0.1.0",
+  "mcpName": "io.github.lordvadar10/invoice4u",
+  "description": "MCP server for Invoice4U (invoice4u.co.il) — read-only by default, one account per process.",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "invoice4u-mcp": "dist/index.js" },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": { "node": ">=20" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lordvadar10/invoice4u-mcp.git"
+  },
+  "homepage": "https://github.com/lordvadar10/invoice4u-mcp#readme",
+  "bugs": { "url": "https://github.com/lordvadar10/invoice4u-mcp/issues" },
+  "keywords": ["mcp", "modelcontextprotocol", "invoice4u", "invoicing", "israel"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  }
+}

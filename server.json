@@ -1,0 +1,55 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.lordvadar10/invoice4u",
+  "description": "MCP server for Invoice4U (invoice4u.co.il) — read-only access to documents, customers and Israeli allocation-number status. One organisation per process.",
+  "repository": {
+    "url": "https://github.com/lordvadar10/invoice4u-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@lordvadar/invoice4u-mcp",
+      "version": "0.1.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "INVOICE4U_ENV",
+          "description": "Which Invoice4U environment to use: qa or production. Required — production is never selected implicitly.",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "INVOICE4U_ACCOUNT",
+          "description": "macOS Keychain account label holding the API key (service: invoice4u). Use this or INVOICE4U_API_KEY.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "INVOICE4U_API_KEY",
+          "description": "Invoice4U API key, for environments with no Keychain. Use this or INVOICE4U_ACCOUNT.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "INVOICE4U_EXPECT_ORG",
+          "description": "Refuse to start unless the API key opens this organisation identifier. Recommended when several Invoice4U accounts are in use.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "INVOICE4U_ALLOW_WRITES",
+          "description": "Reserved for a future write surface. No write tools exist in 0.1.0.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
