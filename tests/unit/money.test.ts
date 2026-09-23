@@ -1,20 +1,38 @@
 import { describe, expect, it } from "vitest";
-import { pickDecimal, sumMoney, toMoneyString } from "../../src/invoice4u/money.js";
+import { pickMoney, sumMoney, toMoneyString, usesDecimals } from "../../src/invoice4u/money.js";
 
 describe("money", () => {
-  it("prefers the *Decimal twin over the float", () => {
-    expect(pickDecimal({ Total: 1234.5600000000001, TotalDecimal: "1234.56" }, "Total")).toBe(
-      "1234.56",
-    );
+  /**
+   * The trap, seen on every document in a live account on 2026-09-23:
+   * TotalDecimal is 0 and UseDecimalValues is null while Total carries the
+   * real amount. Preferring the decimal twin unconditionally would report
+   * every invoice as 0.00.
+   */
+  it("ignores the *Decimal twin when UseDecimalValues is not set", () => {
+    const live = { Total: 40710, TotalDecimal: 0, UseDecimalValues: null };
+    expect(pickMoney(live, "Total")).toBe("40710.00");
   });
 
-  it("falls back to the float when no decimal twin exists", () => {
-    expect(pickDecimal({ Total: 100 }, "Total")).toBe("100.00");
+  it("uses the *Decimal twin when the document says decimals are in use", () => {
+    const doc = { Total: 1234.5600000000001, TotalDecimal: "1234.56", UseDecimalValues: true };
+    expect(pickMoney(doc, "Total")).toBe("1234.56");
+  });
+
+  it("lets a parent document's flag drive nested items", () => {
+    const item = { Price: 34500, PriceDecimal: 0 };
+    expect(pickMoney(item, "Price", false)).toBe("34500.00");
+    expect(pickMoney({ Price: 1, PriceDecimal: "99.99" }, "Price", true)).toBe("99.99");
+  });
+
+  it("reads the flag off a record", () => {
+    expect(usesDecimals({ UseDecimalValues: true })).toBe(true);
+    expect(usesDecimals({ UseDecimalValues: null })).toBe(false);
+    expect(usesDecimals(undefined)).toBe(false);
   });
 
   it("returns null for a missing field", () => {
-    expect(pickDecimal({}, "Total")).toBeNull();
-    expect(pickDecimal(undefined, "Total")).toBeNull();
+    expect(pickMoney({}, "Total")).toBeNull();
+    expect(pickMoney(undefined, "Total")).toBeNull();
   });
 
   it("normalizes to two places", () => {
@@ -22,6 +40,7 @@ describe("money", () => {
     expect(toMoneyString("5.1")).toBe("5.10");
     expect(toMoneyString("-3.456")).toBe("-3.46");
     expect(toMoneyString("0.005")).toBe("0.01");
+    expect(toMoneyString(40710)).toBe("40710.00");
   });
 
   it("rejects values that are not decimal numbers", () => {

@@ -31,7 +31,7 @@ function json(body: unknown): Response {
 describe("connect — organisation assertion", () => {
   it("starts when the organisation matches", async () => {
     const fetchImpl = vi.fn(async () =>
-      json({ d: { CompanyNumber: "514781368", Name: "Codelovers Ltd", Errors: [] } }),
+      json({ d: { OrganizationUniqueId: "514781368", CompanyName: "Codelovers Ltd", OrganizationID: 12235, Errors: [] } }),
     );
     vi.stubGlobal("fetch", fetchImpl);
 
@@ -44,7 +44,7 @@ describe("connect — organisation assertion", () => {
 
   it("refuses to start when the key opens a different organisation", async () => {
     const fetchImpl = vi.fn(async () =>
-      json({ d: { CompanyNumber: "999999999", Name: "Some Other Business", Errors: [] } }),
+      json({ d: { OrganizationUniqueId: "999999999", CompanyName: "Some Other Business", Errors: [] } }),
     );
     vi.stubGlobal("fetch", fetchImpl);
 
@@ -57,7 +57,7 @@ describe("connect — organisation assertion", () => {
 
   it("names both the expectation and what was actually opened", async () => {
     const fetchImpl = vi.fn(async () =>
-      json({ d: { CompanyNumber: "999999999", Name: "Some Other Business", Errors: [] } }),
+      json({ d: { OrganizationUniqueId: "999999999", CompanyName: "Some Other Business", Errors: [] } }),
     );
     vi.stubGlobal("fetch", fetchImpl);
 
@@ -70,7 +70,7 @@ describe("connect — organisation assertion", () => {
 
   it("matches on any identifier field, since the authoritative one is unconfirmed", async () => {
     const fetchImpl = vi.fn(async () =>
-      json({ d: { OrganizationID: 4242, Name: "Rikud Israeli", Errors: [] } }),
+      json({ d: { OrganizationID: 4242, CompanyName: "Rikud Israeli", Errors: [] } }),
     );
     vi.stubGlobal("fetch", fetchImpl);
 
@@ -81,7 +81,7 @@ describe("connect — organisation assertion", () => {
   });
 
   it("serves without assertion when no expectation is configured", async () => {
-    const fetchImpl = vi.fn(async () => json({ d: { Name: "Whatever Ltd", Errors: [] } }));
+    const fetchImpl = vi.fn(async () => json({ d: { CompanyName: "Whatever Ltd", Errors: [] } }));
     vi.stubGlobal("fetch", fetchImpl);
 
     const connection = await connect(baseConfig(), log);

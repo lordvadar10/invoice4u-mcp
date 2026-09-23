@@ -69,19 +69,20 @@ export const LANGUAGE = { hebrew: 1, english: 2 } as const;
 /**
  * Document status.
  *
- * UNVERIFIED — the WSDL contains no enum for StatusID, so these names come from
- * a third-party integration and have never been checked against live data.
- * `documentStatusName` therefore never guesses: an unrecognised code is
- * reported as its number, not mapped to a plausible-looking name.
+ * The WSDL contains no enum for StatusID. Codes 1, 2 and 3 were confirmed
+ * against live production data on 2026-09-23, where the API also returns a
+ * Hebrew `Status` string alongside the id:
  *
- * @see docs/open-questions.md
+ *   1 = פתוחה (open)  ·  2 = סגורה (closed)  ·  3 = מזוכית (credited)
+ *
+ * Anything else is still unknown and is reported as a bare number rather than
+ * guessed. The API's own `Status` string is passed through when present, so
+ * callers never depend on this map alone.
  */
-export const DOCUMENT_STATUS_UNVERIFIED: ReadonlyMap<number, string> = new Map([
+export const DOCUMENT_STATUS_VERIFIED: ReadonlyMap<number, string> = new Map([
   [1, "open"],
   [2, "closed"],
-  [3, "fully_credited"],
-  [4, "partially_credited"],
-  [5, "cancelled"],
+  [3, "credited"],
 ]);
 
 export function documentTypeName(code: number | undefined): string {
@@ -94,9 +95,22 @@ export function paymentTypeName(code: number | undefined): string {
   return PAYMENT_TYPE_BY_CODE.get(code) ?? `unknown_payment_type_${code}`;
 }
 
-/** Returns `{ code, name? }` — `name` is omitted when the code is not one of the unverified five. */
-export function documentStatusName(code: number | undefined): { code: number | null; name?: string } {
-  if (code === undefined) return { code: null };
-  const name = DOCUMENT_STATUS_UNVERIFIED.get(code);
-  return name === undefined ? { code } : { code, name };
+/**
+ * Returns `{ code, name?, label? }`.
+ *
+ * `name` appears only for a code confirmed against live data; `label` is the
+ * API's own Hebrew status string when it supplied one.
+ */
+export function documentStatusName(
+  code: number | undefined,
+  apiLabel?: unknown,
+): { code: number | null; name?: string; label?: string } {
+  const label = typeof apiLabel === "string" && apiLabel !== "" ? apiLabel : undefined;
+  if (code === undefined) return label === undefined ? { code: null } : { code: null, label };
+  const name = DOCUMENT_STATUS_VERIFIED.get(code);
+  return {
+    code,
+    ...(name === undefined ? {} : { name }),
+    ...(label === undefined ? {} : { label }),
+  };
 }

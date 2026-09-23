@@ -25,9 +25,19 @@ describe("enums", () => {
     expect(paymentTypeName(99)).toBe("unknown_payment_type_99");
   });
 
-  it("never guesses an unverified status name", () => {
+  it("names the three statuses confirmed against live data", () => {
     expect(documentStatusName(1)).toEqual({ code: 1, name: "open" });
+    expect(documentStatusName(2)).toEqual({ code: 2, name: "closed" });
+    expect(documentStatusName(3)).toEqual({ code: 3, name: "credited" });
+  });
+
+  it("passes the API's own Hebrew status string through", () => {
+    expect(documentStatusName(2, "סגורה")).toEqual({ code: 2, name: "closed", label: "סגורה" });
+  });
+
+  it("reports an unconfirmed code as a bare number rather than guessing", () => {
     expect(documentStatusName(9)).toEqual({ code: 9 });
+    expect(documentStatusName(9, "משהו")).toEqual({ code: 9, label: "משהו" });
     expect(documentStatusName(undefined)).toEqual({ code: null });
   });
 });

@@ -23,11 +23,28 @@ function json(body: unknown): Response {
  * outcomes.
  */
 describe("authenticate", () => {
-  it("auto: uses the key directly when IsAuthenticated accepts it", async () => {
-    const fetchImpl = vi.fn(async () => json({ d: true }));
+  /**
+   * IsAuthenticated returns a User object, not a boolean — confirmed live on
+   * 2026-09-23. An earlier version of this probe tested `result === true` and
+   * therefore always fell through to the exchange.
+   */
+  it("auto: uses the key directly when IsAuthenticated returns a user", async () => {
+    const fetchImpl = vi.fn(async () =>
+      json({ d: { __type: "User:#Invoice.Common", Errors: [], ID: 12235, CompanyName: "X" } }),
+    );
     const session = await authenticate(client(fetchImpl), "key", "auto", log);
 
     expect(session).toEqual({ token: "key", mode: "direct" });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("auto: an expired account is surfaced, not papered over by the exchange", async () => {
+    const fetchImpl = vi.fn(async () =>
+      json({ d: { Errors: [{ ID: 66, Error: "ExpiredAccount" }] } }),
+    );
+    await expect(authenticate(client(fetchImpl), "key", "auto", log)).rejects.toThrow(
+      /ExpiredAccount/,
+    );
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 

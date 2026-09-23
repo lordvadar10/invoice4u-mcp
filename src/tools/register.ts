@@ -14,6 +14,7 @@ import type { Config } from "../config.js";
 import { DOCUMENT_TYPE, DOCUMENT_TYPE_HE, type DocumentTypeName } from "../invoice4u/enums.js";
 import { Invoice4uError } from "../invoice4u/errors.js";
 import type { Connection } from "../invoice4u/session.js";
+import { toWcfDate, unwrapCollection } from "../invoice4u/wire.js";
 import {
   allocationView,
   shapeBranch,
@@ -82,7 +83,9 @@ export function registerTools(server: McpServer, connection: Connection, config:
         annotations: READ_ONLY,
       },
       guard(async () => {
-        const branches = await call<unknown>("GetBranches").catch(() => null);
+        const branches = await call<unknown>("GetBranches")
+          .then(unwrapCollection)
+          .catch(() => null);
         return {
           organisation: org.label,
           identifiers: org.candidates,
@@ -92,7 +95,7 @@ export function registerTools(server: McpServer, connection: Connection, config:
           keySource: config.keySource,
           organisationAsserted: config.expectOrg !== undefined,
           writesEnabled: config.allowWrites,
-          branchCount: Array.isArray(branches) ? branches.length : null,
+          branchCount: branches === null ? null : branches.length,
         };
       }),
     ),
@@ -117,7 +120,9 @@ export function registerTools(server: McpServer, connection: Connection, config:
           customerName: z.string().min(1).optional(),
           fromAmount: z.number().optional(),
           toAmount: z.number().optional(),
-          currency: z.string().length(3).optional(),
+          currency: z.string().min(1).optional().describe(
+            'Currency as the account stores it — often the symbol, e.g. "₪".',
+          ),
           limit: z.number().int().min(1).max(500).default(50),
           includeItems: z.boolean().default(false),
           includePayments: z.boolean().default(false),
@@ -131,16 +136,17 @@ export function registerTools(server: McpServer, connection: Connection, config:
           PaymentsIncluded: args.includePayments,
         };
         if (args.documentType !== undefined) dr.DocumentType = DOCUMENT_TYPE[args.documentType];
-        if (args.fromDate !== undefined) dr.From = `${args.fromDate}T00:00:00`;
-        if (args.toDate !== undefined) dr.To = `${args.toDate}T23:59:59`;
+        // Dates MUST go out as /Date(ms)/ — an ISO string makes the service
+        // throw and answer HTTP 500.
+        if (args.fromDate !== undefined) dr.From = toWcfDate(args.fromDate);
+        if (args.toDate !== undefined) dr.To = toWcfDate(args.toDate, true);
         if (args.customerId !== undefined) dr.CustomerID = args.customerId;
         if (args.customerName !== undefined) dr.CustomerName = args.customerName;
         if (args.fromAmount !== undefined) dr.FromAmount = args.fromAmount;
         if (args.toAmount !== undefined) dr.ToAmount = args.toAmount;
         if (args.currency !== undefined) dr.Currency = args.currency;
 
-        const result = await call<unknown>("GetDocuments", { dr });
-        const rows = Array.isArray(result) ? result : [];
+        const rows = unwrapCollection(await call<unknown>("GetDocuments", { dr }));
         const documents = rows.map(shapeDocumentSummary).filter((d) => d !== null);
 
         return {
@@ -191,7 +197,7 @@ export function registerTools(server: McpServer, connection: Connection, config:
       guard(async (args) => {
         let raw: unknown;
         if (args.documentId !== undefined) {
-          raw = await call("GetDocument", { id: args.documentId });
+          raw = await call("GetDocument", { docId: args.documentId });
         } else if (args.apiIdentifier !== undefined) {
           raw = await call("GetDocumentByApiIdentifier", {
             apiIdentifier: args.apiIdentifier,
@@ -201,7 +207,7 @@ export function registerTools(server: McpServer, connection: Connection, config:
         } else {
           raw = await call("GetDocumentByNumber", {
             docNumber: args.documentNumber,
-            docType: DOCUMENT_TYPE[args.documentType as DocumentTypeName],
+            documentType: DOCUMENT_TYPE[args.documentType as DocumentTypeName],
           });
         }
 
@@ -232,15 +238,16 @@ export function registerTools(server: McpServer, connection: Connection, config:
         annotations: READ_ONLY,
       },
       guard(async (args) => {
-        const result = await call<unknown>("GetDocuments", {
-          dr: {
-            DocumentType: DOCUMENT_TYPE[args.documentType],
-            From: `${args.fromDate}T00:00:00`,
-            To: `${args.toDate}T23:59:59`,
-            Limit: args.limit,
-          },
-        });
-        const rows = Array.isArray(result) ? result : [];
+        const rows = unwrapCollection(
+          await call<unknown>("GetDocuments", {
+            dr: {
+              DocumentType: DOCUMENT_TYPE[args.documentType],
+              From: toWcfDate(args.fromDate),
+              To: toWcfDate(args.toDate, true),
+              Limit: args.limit,
+            },
+          }),
+        );
 
         const withAllocation: Json[] = [];
         const missing: Json[] = [];
@@ -280,8 +287,7 @@ export function registerTools(server: McpServer, connection: Connection, config:
         annotations: READ_ONLY,
       },
       guard(async (args) => {
-        const result = await call<unknown>("GetCustomersByOrgId");
-        const rows = Array.isArray(result) ? result : [];
+        const rows = unwrapCollection(await call<unknown>("GetCustomersByOrgId"));
 
         let customers = rows.map((r) => shapeCustomer(r, false)).filter((c) => c !== null);
         if (args.activeOnly) customers = customers.filter((c) => c.active === true);
@@ -312,7 +318,10 @@ export function registerTools(server: McpServer, connection: Connection, config:
         annotations: READ_ONLY,
       },
       guard(async (args) => {
-        const raw = await call("GetFullCustomer", { id: args.customerId });
+        const raw = await call("GetFullCustomer", {
+          id: args.customerId,
+          orgID: org.id ?? 0,
+        });
         const customer = shapeCustomer(raw, true);
         if (customer === null) {
           throw new Invoice4uError({
@@ -335,8 +344,7 @@ export function registerTools(server: McpServer, connection: Connection, config:
         annotations: READ_ONLY,
       },
       guard(async () => {
-        const result = await call<unknown>("GetBranches");
-        const rows = Array.isArray(result) ? result : [];
+        const rows = unwrapCollection(await call<unknown>("GetBranches"));
         return {
           organisation: org.label,
           branches: rows.map(shapeBranch).filter((b) => b !== null),

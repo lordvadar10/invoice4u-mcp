@@ -13,6 +13,8 @@ import { Invoice4uClient } from "./client.js";
 import { Invoice4uError } from "./errors.js";
 
 export interface OrgIdentity {
+  /** Numeric organisation id, used by operations that require an orgID. */
+  id: number | null;
   /** Every identifier the API offered, so a mismatch can say what was on offer. */
   candidates: Record<string, string>;
   label: string;
@@ -28,45 +30,54 @@ export interface Connection {
 /**
  * Identifier fields worth comparing against INVOICE4U_EXPECT_ORG.
  *
- * Which field carries the company number is not yet confirmed against live
- * data, so the assertion accepts a match on ANY of them rather than guessing
- * one. See docs/open-questions.md.
+ * Confirmed live on 2026-09-23: the company registration number arrives as
+ * `OrganizationUniqueId` — note the lower-case `d` — and only from
+ * GetUserData. `IsAuthenticated` carries `CompanyName` and `OrganizationID`
+ * but not the registration number, so both calls are merged below.
  */
 const ORG_ID_FIELDS: readonly string[] = [
-  "CompanyNumber",
+  "OrganizationUniqueId",
   "OrganizationUniqueID",
   "OrganizationID",
-  "OrgID",
-  "UniqueID",
-  "ID",
+  "CompanyNumber",
   "VatNumber",
-  "CompanyId",
-  "CompanyID",
+  "OrgID",
+  "ID",
 ];
 
-const ORG_NAME_FIELDS: readonly string[] = ["OrganizationName", "CompanyName", "Name", "Email"];
+const ORG_NAME_FIELDS: readonly string[] = ["CompanyName", "OrganizationName", "Name"];
 
-function extractIdentity(userData: unknown): OrgIdentity {
+function asString(value: unknown): string | null {
+  if (typeof value === "string" && value !== "") return value;
+  if (typeof value === "number") return String(value);
+  return null;
+}
+
+/** Merge the identity fields of several payloads; earlier sources win. */
+function extractIdentity(...sources: unknown[]): OrgIdentity {
   const candidates: Record<string, string> = {};
-  let label = "unknown organisation";
+  let label: string | null = null;
+  let id: number | null = null;
 
-  if (typeof userData === "object" && userData !== null) {
-    const record = userData as Record<string, unknown>;
+  for (const source of sources) {
+    if (typeof source !== "object" || source === null) continue;
+    const record = source as Record<string, unknown>;
+
     for (const field of ORG_ID_FIELDS) {
-      const value = record[field];
-      if (typeof value === "string" && value !== "") candidates[field] = value;
-      else if (typeof value === "number") candidates[field] = String(value);
+      const value = asString(record[field]);
+      if (value !== null && candidates[field] === undefined) candidates[field] = value;
     }
     for (const field of ORG_NAME_FIELDS) {
-      const value = record[field];
-      if (typeof value === "string" && value !== "") {
-        candidates[field] = value;
-        if (label === "unknown organisation") label = value;
+      const value = asString(record[field]);
+      if (value !== null) {
+        if (candidates[field] === undefined) candidates[field] = value;
+        label ??= value;
       }
     }
+    if (id === null && typeof record.OrganizationID === "number") id = record.OrganizationID;
   }
 
-  return { candidates, label };
+  return { id, candidates, label: label ?? "unknown organisation" };
 }
 
 /**
@@ -84,16 +95,17 @@ export async function connect(config: Config, log: Logger): Promise<Connection> 
 
   const session = await authenticate(client, config.apiKey, config.authMode, log);
 
-  let org: OrgIdentity;
-  try {
-    org = extractIdentity(await client.call("GetUserData", {}, { token: session.token }));
-  } catch (error) {
-    if (config.expectOrg !== undefined) throw error;
-    log.warn(
-      `could not read organisation details: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    org = { candidates: {}, label: "unknown organisation" };
-  }
+  // Two calls, because neither alone is enough: IsAuthenticated returns the
+  // company name, GetUserData returns the registration number.
+  const identity = await client.call("IsAuthenticated", {}, { token: session.token });
+  const userData = await client
+    .call("GetUserData", {}, { token: session.token })
+    .catch((error: unknown) => {
+      log.debug(`GetUserData unavailable: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    });
+
+  const org = extractIdentity(identity, userData);
 
   if (config.expectOrg !== undefined) {
     const matched = Object.values(org.candidates).some((value) => value === config.expectOrg);

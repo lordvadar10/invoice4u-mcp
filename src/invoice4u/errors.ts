@@ -7,6 +7,7 @@
 
 export type ErrorKind =
   | "unauthorized"
+  | "account_expired"
   | "not_found"
   | "already_exists"
   | "validation"
@@ -73,10 +74,14 @@ export class Invoice4uError extends Error {
  */
 const KIND_BY_ERROR_TEXT: ReadonlyMap<string, ErrorKind> = new Map([
   ["UnauthorizedUser", "unauthorized"],
+  ["ExpiredAccount", "account_expired"],
 ]);
 
-/** Error ID 80 = UnauthorizedUser, observed live on 2026-09-23. */
-const KIND_BY_ERROR_ID: ReadonlyMap<number, ErrorKind> = new Map([[80, "unauthorized"]]);
+/** Both observed live on 2026-09-23: 80 = UnauthorizedUser, 66 = ExpiredAccount. */
+const KIND_BY_ERROR_ID: ReadonlyMap<number, ErrorKind> = new Map([
+  [80, "unauthorized"],
+  [66, "account_expired"],
+]);
 
 export function classify(errors: readonly CommonError[]): ErrorKind {
   for (const e of errors) {

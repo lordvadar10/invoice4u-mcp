@@ -44,12 +44,22 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  const message =
+  let message =
     error instanceof Invoice4uError
       ? error.message
       : error instanceof Error
         ? error.message
         : String(error);
+
+  // The raw "ExpiredAccount (66)" is accurate but tells the reader nothing
+  // about what to do, and it is not a problem with the key or the config.
+  if (error instanceof Invoice4uError && error.kind === "account_expired") {
+    message =
+      "This Invoice4U account's subscription has expired, so the API rejects it. " +
+      "The API key is valid — renew the subscription in the Invoice4U account, " +
+      "then start the server again. (ExpiredAccount, error 66)";
+  }
+
   process.stderr.write(`[invoice4u-mcp] fatal: ${message}\n`);
   process.exit(1);
 });

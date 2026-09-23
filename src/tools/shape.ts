@@ -11,7 +11,8 @@ import {
   documentTypeName,
   paymentTypeName,
 } from "../invoice4u/enums.js";
-import { pickDecimal } from "../invoice4u/money.js";
+import { pickMoney, usesDecimals } from "../invoice4u/money.js";
+import { fromWcfDate } from "../invoice4u/wire.js";
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -29,20 +30,8 @@ function num(value: unknown): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
 
-/**
- * WCF serializes dates as `/Date(1690000000000+0300)/`. Converted to ISO here
- * so tool output is comparable and sortable.
- */
-export function toIsoDate(value: unknown): string | null {
-  if (typeof value !== "string" || value === "") return null;
-  const wcf = /^\/Date\((-?\d+)([+-]\d{4})?\)\/$/.exec(value);
-  if (wcf !== null) {
-    const ms = Number(wcf[1]);
-    return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
-  }
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? value : new Date(parsed).toISOString();
-}
+/** WCF serializes dates as `/Date(1690000000000+0300)/`; ISO is friendlier. */
+export const toIsoDate = fromWcfDate;
 
 export interface AllocationView {
   number: string | null;
@@ -76,14 +65,14 @@ export function shapeDocumentSummary(value: unknown): Record<string, unknown> | 
     id: str(doc.ID),
     documentNumber: num(doc.DocumentNumber) ?? str(doc.DocumentNumber),
     documentType: documentTypeName(num(doc.DocumentType)),
-    status: documentStatusName(num(doc.StatusID)),
+    status: documentStatusName(num(doc.StatusID), doc.Status),
     issueDate: toIsoDate(doc.IssueDate),
     customer: { id: num(doc.ClientID) ?? null, name: str(doc.ClientName) },
     currency: str(doc.Currency),
-    total: pickDecimal(doc, "Total"),
-    totalWithoutTax: pickDecimal(doc, "TotalWithoutTax"),
-    balance: pickDecimal(doc, "Balance"),
-    paid: pickDecimal(doc, "Paid"),
+    total: pickMoney(doc, "Total"),
+    totalWithoutTax: pickMoney(doc, "TotalWithoutTax"),
+    balance: pickMoney(doc, "Balance"),
+    paid: pickMoney(doc, "Paid"),
     allocation: allocationView(doc),
   };
 }
@@ -94,6 +83,10 @@ export function shapeDocumentDetail(value: unknown): Record<string, unknown> | n
   const summary = shapeDocumentSummary(doc);
   if (summary === null) return null;
 
+  // Items and payments carry the *Decimal twins but not the UseDecimalValues
+  // flag — that lives on the parent document, so it is passed down.
+  const useDecimal = usesDecimals(doc);
+
   const items = Array.isArray(doc.Items)
     ? doc.Items.map((raw) => {
         const item = record(raw);
@@ -102,10 +95,10 @@ export function shapeDocumentDetail(value: unknown): Record<string, unknown> | n
           name: str(item.Name),
           code: str(item.Code),
           description: str(item.Description),
-          quantity: pickDecimal(item, "Quantity"),
-          unitPrice: pickDecimal(item, "Price"),
-          taxPercentage: pickDecimal(item, "TaxPercentage"),
-          total: pickDecimal(item, "Total"),
+          quantity: pickMoney(item, "Quantity", useDecimal),
+          unitPrice: pickMoney(item, "Price", useDecimal),
+          taxPercentage: pickMoney(item, "TaxPercentage", useDecimal),
+          total: pickMoney(item, "Total", useDecimal),
         };
       }).filter((v) => v !== null)
     : [];
@@ -115,7 +108,7 @@ export function shapeDocumentDetail(value: unknown): Record<string, unknown> | n
         const payment = record(raw);
         if (payment === undefined) return null;
         return {
-          amount: pickDecimal(payment, "Amount"),
+          amount: pickMoney(payment, "Amount", useDecimal),
           date: toIsoDate(payment.Date),
           method: paymentTypeName(num(payment.PaymentType)),
           paymentNumber: str(payment.PaymentNumber),
@@ -131,8 +124,8 @@ export function shapeDocumentDetail(value: unknown): Record<string, unknown> | n
     ...summary,
     subject: str(doc.Subject),
     apiIdentifier: str(doc.ApiIdentifier),
-    taxPercentage: pickDecimal(doc, "TaxPercentage"),
-    totalTaxAmount: pickDecimal(doc, "TotalTaxAmount"),
+    taxPercentage: pickMoney(doc, "TaxPercentage"),
+    totalTaxAmount: pickMoney(doc, "TotalTaxAmount"),
     paymentDueDate: toIsoDate(doc.PaymentDueDate),
     externalComments: str(doc.ExternalComments),
     pdfUrl: str(doc.PrintOriginalPDFLink),

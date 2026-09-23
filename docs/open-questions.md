@@ -1,79 +1,118 @@
 # Open questions
 
-Things not yet confirmed against live Invoice4U data. Each one names what would
-settle it. Nothing here is guessed in code — where the answer is unknown, the
-server either probes at runtime or reports the raw value rather than inventing
-a label.
+Status after live verification against two real Invoice4U accounts on
+**2026-09-23**. Five of the seven original questions are now settled; two
+remain.
 
-## 1. Is an API key usable directly as the session token?
+## Settled
 
-**Status:** resolved at runtime, not yet pinned.
+### 1. Is an API key usable directly as the session token? — **YES**
 
-The contract offers `VerifyLoginApiKey(apiKey)` and also accepts a `token` on
-every call, and the public documentation does not say whether an API key is
-itself a token. Probing anonymously cannot tell them apart — a bogus key and a
-bogus token both answer `UnauthorizedUser`.
+Both routes work. `IsAuthenticated(token = apiKey)` succeeds, so the API key
+*is* a session token and `VerifyLoginApiKey` is an optional extra round trip.
 
-`INVOICE4U_AUTH_MODE=auto` therefore tries the key directly and falls back to
-the exchange, and `invoice4u_verify_connection` reports which route won.
+`INVOICE4U_AUTH_MODE=auto` confirms this at startup and reports `direct`.
+Setting `INVOICE4U_AUTH_MODE=direct` skips the probe and saves one call.
 
-**To settle:** run `invoice4u_verify_connection` with a real key and read
-`authMode`. Then pin `INVOICE4U_AUTH_MODE` to that value and record it here.
+**Trap found here:** `IsAuthenticated` does **not** return a boolean. It
+returns a full `User` object for a good token and `null` for a bad one,
+reporting problems through the usual `Errors` array. Code that tests
+`result === true` concludes the key is invalid and silently falls through to
+the exchange.
 
-## 2. Token lifetime
+### 3. Which field identifies the organisation? — `OrganizationUniqueId`
 
-Unknown. If tokens expire mid-session, the client needs to re-authenticate on
-an `unauthorized` failure and retry once. Not implemented, because it is not
-yet known whether it is needed.
+The company registration number arrives as **`OrganizationUniqueId`** — note
+the lower-case `d` — and only from `GetUserData`. `IsAuthenticated` carries
+`CompanyName` and `OrganizationID` but not the registration number, so
+`connect()` merges both calls.
 
-**To settle:** hold a session open and watch for `UnauthorizedUser` on a call
-that previously succeeded. `GetExpDateByApiKey` exists, so API keys themselves
-expire — that is separate from token lifetime and also needs a value.
+Observed: Codelovers `OrganizationUniqueId=514781368`, `OrganizationID=12235`.
 
-## 3. Which field identifies the organisation?
+`INVOICE4U_EXPECT_ORG` still matches against any identifier field, so either
+the registration number or the organisation id works.
 
-**Status:** worked around.
+### 4. `StatusID` values — 1, 2, 3 confirmed
 
-`INVOICE4U_EXPECT_ORG` is compared against *any* identifier field returned by
-`GetUserData` (`CompanyNumber`, `OrganizationUniqueID`, `OrganizationID`,
-`OrgID`, `UniqueID`, `ID`, `VatNumber`, `CompanyId`, `CompanyID`) rather than
-one guessed field.
+```
+1 = פתוחה  (open)
+2 = סגורה  (closed)
+3 = מזוכית (credited)
+```
 
-**To settle:** call `GetUserData` with a real key, record the actual response
-shape, and narrow the comparison to the field that genuinely carries the
-company number.
+The API also returns its own Hebrew `Status` string in list results, which is
+passed straight through as `status.label`. Codes 4 and 5 were never observed,
+so they are still reported as bare numbers rather than guessed.
 
-## 4. `StatusID` values
+A third-party integration claims `4 = partially_credited, 5 = cancelled`.
+Unverified — do not adopt without seeing it.
 
-**Status:** deliberately not guessed.
+### 5. `GetDocuments` paging — windowing, no cursor
 
-The WSDL contains no enum for `StatusID`. A third-party integration uses
-`1=open, 2=closed, 3=fully_credited, 4=partially_credited, 5=cancelled`, but it
-has never been run against live data. `documentStatusName` returns the raw code
-and only adds a name for those five, so an unknown code is reported as a number
-rather than mislabelled.
+`Limit` works; there is no offset or cursor. `invoice4u_list_documents` warns
+when a result hits the limit so the caller knows to narrow the window.
 
-**To settle:** read documents in each known state and record the codes.
+### 7. Generating an API key — done
 
-## 5. `GetDocuments` paging
+Keys exist for both accounts. The UI path was not needed and remains
+undocumented here.
 
-`DocumentsRequest` has `Limit` but no offset or cursor, which suggests paging
-is done by narrowing the date or number window. `invoice4u_list_documents`
-warns when a result hits the limit.
+## Still open
 
-**To settle:** query an account with more documents than the limit and see
-whether anything indicates truncation.
+### 2. Token lifetime
 
-## 6. Rate limits
+Unknown. Sessions held for the length of a probe run did not expire, but
+nothing long-running has been tested. If tokens do expire, the client needs to
+re-authenticate on an `unauthorized` failure and retry once.
 
-Nothing documented, nothing inferable from the contract.
+With `INVOICE4U_AUTH_MODE=direct` the token is the API key, so this may only
+matter for `exchange` mode.
 
-**To settle:** ask Invoice4U support, or observe under load.
+**To settle:** hold a server up for hours and watch for `UnauthorizedUser` on
+a call that previously worked.
 
-## 7. Generating an API key in the Invoice4U UI
+### 6. Rate limits
 
-Not documented publicly. Third-party guides all defer to an Invoice4U guide
-that needs an account to reach.
+Still nothing documented, and nothing was hit during testing.
 
-**To settle:** find it in the account, or ask Invoice4U support, and document
-the path here.
+**To settle:** ask Invoice4U support.
+
+---
+
+## Wire-format findings
+
+Everything below was verified live and is not in the published documentation.
+
+**Collection responses wrap their rows.** `GetDocuments` and
+`GetCustomersByOrgId` answer with
+`{__type: "CommonCollectionOf…", Errors, Info, OpenInfo, Response: [...]}`,
+while `GetBranches` answers with a **bare array**. Both shapes are real;
+`unwrapCollection` handles either.
+
+**Request dates must be `/Date(ms)/`.** An ISO-8601 string in a
+`DocumentsRequest` makes the service throw and return HTTP 500 with a .NET
+stack trace. Response dates come back as `/Date(1737842400000+0200)/`.
+
+**`*Decimal` fields are usually zero.** Across every document in a live
+account, `UseDecimalValues` was `null` and every `*Decimal` field was `0`
+while the plain field held the real amount. Preferring the decimal twin
+unconditionally reports every total as `0.00`. The twin is authoritative only
+when `UseDecimalValues` is `true`.
+
+**Operation parameter names**, from the WSDL and confirmed live:
+
+| Operation | Parameters |
+|---|---|
+| `GetDocument` | `docId`, `token` |
+| `GetDocumentByNumber` | `docNumber`, `documentType`, `token` |
+| `GetDocumentByApiIdentifier` | `apiIdentifier`, `docType`, `token` |
+| `GetFullCustomer` | `id`, `orgID`, `token` |
+| `GetCustomerById` | `custId`, `token` |
+| `GetDocuments` | `dr`, `token` |
+| `GetBranches`, `GetCustomersByOrgId` | `token` |
+
+Note the inconsistency: `documentType` on one, `docType` on another.
+
+**Error codes seen live:** `80 = UnauthorizedUser`, `66 = ExpiredAccount`.
+
+**Currency** comes back as a symbol (`"₪"`), not an ISO code.

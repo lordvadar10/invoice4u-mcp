@@ -24,14 +24,25 @@ export interface Session {
   mode: ResolvedAuthMode;
 }
 
-/** True when the API accepts this token for authenticated calls. */
+/**
+ * True when the API accepts this token for authenticated calls.
+ *
+ * `IsAuthenticated` does NOT return a boolean — verified live on 2026-09-23,
+ * it returns a full `User` object for a good token and `null` for a bad one,
+ * reporting problems through the usual `Errors` array (which `call` has
+ * already turned into a throw). So "worked" means "came back non-null".
+ */
 async function tokenWorks(client: Invoice4uClient, token: string): Promise<boolean> {
   try {
     const result = await client.call<unknown>("IsAuthenticated", {}, { token });
-    return result === true;
+    return result !== null && result !== undefined;
   } catch (error) {
-    if (error instanceof Invoice4uError && error.kind === "unauthorized") return false;
-    if (error instanceof Invoice4uError && error.kind === "api_error") return false;
+    if (error instanceof Invoice4uError) {
+      // An expired account is a real answer about the account, not about the
+      // key's form — retrying through the exchange would only hide it.
+      if (error.kind === "account_expired") throw error;
+      if (error.kind === "unauthorized" || error.kind === "api_error") return false;
+    }
     throw error;
   }
 }
